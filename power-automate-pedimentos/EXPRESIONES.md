@@ -1,12 +1,31 @@
-# Expresiones listas para pegar en Power Automate
+# Expresiones listas para pegar
 
-## Nombre carpeta mes (estable)
+## Dominio @intelideck.com
 
-### Compose `MesEsp`
+```powerfx
+endsWith(
+  toLower(triggerBody()?['from']?['emailAddress']?['address']),
+  '@intelideck.com'
+)
+```
+
+Fallback si `from` viene como texto:
+
+```powerfx
+contains(toLower(string(triggerBody()?['from'])), '@intelideck.com')
+```
+
+## Año (desde fecha del correo)
+
+```powerfx
+formatDateTime(triggerBody()?['receivedDateTime'], 'yyyy')
+```
+
+## Mes en español (`MesEsp`)
 
 ```powerfx
 switch(
-  int(formatDateTime(utcNow(), 'MM')),
+  int(formatDateTime(triggerBody()?['receivedDateTime'], 'MM')),
   1, 'ENERO',
   2, 'FEBRERO',
   3, 'MARZO',
@@ -23,79 +42,110 @@ switch(
 )
 ```
 
-### Variable / Compose `NombreCarpetaMes`
+## CarpetaMes
 
 ```powerfx
 concat(
-  formatDateTime(utcNow(), 'MM'),
+  formatDateTime(triggerBody()?['receivedDateTime'], 'MM'),
   ' ',
   outputs('MesEsp'),
   ' ',
-  formatDateTime(utcNow(), 'yyyy')
+  formatDateTime(triggerBody()?['receivedDateTime'], 'yyyy')
 )
 ```
 
-Ejemplos:
-
-- Septiembre 2026 → `09 SEPTIEMBRE 2026`
-- Octubre 2026 → `10 OCTUBRE 2026`
-
-## Ruta base dinámica por año
+## Rutas OneDrive
 
 ```powerfx
 concat(
-  'Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES ',
-  formatDateTime(utcNow(), 'yyyy')
+  '/Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES ',
+  variables('Anio')
 )
 ```
 
-## Ruta completa de la carpeta del mes
-
 ```powerfx
 concat(
-  variables('RutaBase'),
+  variables('RutaAnio'),
   '/',
-  variables('NombreCarpetaMes')
+  variables('CarpetaMes')
 )
 ```
 
-## Condición: el correo es del dominio intelideck.com (recomendada)
-
-Tras el desencadenador:
-
-```powerfx
-endsWith(
-  toLower(
-    trim(
-      last(
-        split(
-          string(triggerOutputs()?['body/from']),
-          '@'
-        )
-      )
-    )
-  ),
-  'intelideck.com'
-)
-```
-
-Versión simple (también sirve en la mayoría de casos):
-
-```powerfx
-contains(toLower(string(triggerOutputs()?['body/from'])), '@intelideck.com')
-```
-
-## Condición: PDF (cualquier nombre)
-
-El nombre del archivo es indistinto (`1422CEX0126026494.pdf` u otro). Solo importa la extensión:
+## ¿Es PDF? (nombre indistinto)
 
 ```powerfx
 endsWith(toLower(items('Apply_to_each')?['name']), '.pdf')
 ```
 
-## Valores fijos sugeridos
+## Filtro OData Excel (corregido, una sola línea)
 
-| Variable | Tipo | Valor |
-|----------|------|-------|
-| `RutaBase` | Cadena | `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026` |
-| `AnioExtracciones` | Cadena | `2026` |
+En *Listar filas presentes en una tabla* → Filter Query:
+
+```text
+MessageID eq '@{triggerBody()?['id']}' and NombrePDF eq '@{replace(items('Apply_to_each')?['name'], '''', '''''')}'
+```
+
+Errores comunes a evitar:
+
+| Incorrecto | Correcto |
+|------------|----------|
+| `MessageID = '...'` | `MessageID eq '...'` |
+| `AND` en mayúsculas raro / saltos de línea rotos | `and` en la misma línea |
+| Nombre con `'` sin escapar | `replace(..., '''', '''''')` |
+
+## Alternativa: Filtrar matriz (sin OData)
+
+Desde:
+
+```powerfx
+body('List_rows_present_in_a_table')?['value']
+```
+
+Condición:
+
+```powerfx
+@and(
+  equals(item()?['MessageID'], triggerBody()?['id']),
+  equals(item()?['NombrePDF'], items('Apply_to_each')?['name'])
+)
+```
+
+## ¿Ya existe en Excel?
+
+```powerfx
+greater(length(body('List_rows_present_in_a_table')?['value']), 0)
+```
+
+O con Filtrar matriz:
+
+```powerfx
+greater(length(body('Filter_array')), 0)
+```
+
+## Tamaño del adjunto (para Excel)
+
+```powerfx
+items('Apply_to_each')?['size']
+```
+
+## RutaDestino (texto para Excel)
+
+```powerfx
+concat(
+  'EXTRACCIONES ',
+  variables('Anio'),
+  '/',
+  variables('CarpetaMes')
+)
+```
+
+## Opcional: duplicado en carpeta OneDrive (nombre + tamaño)
+
+Tras *Enumerar archivos en carpeta*, Filtrar matriz:
+
+```powerfx
+@and(
+  equals(item()?['Name'], items('Apply_to_each')?['name']),
+  equals(item()?['Size'], items('Apply_to_each')?['size'])
+)
+```

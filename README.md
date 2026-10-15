@@ -1,6 +1,6 @@
-# Automatización de pedimentos (Power Automate)
+# Pedimentos Intelideck → OneDrive + Excel
 
-Guía para guardar automáticamente los PDF de pedimentos que envía el agente aduanal por Outlook en la carpeta mensual de Extracciones en OneDrive.
+Flujo Power Automate para guardar PDF de `@intelideck.com` en la carpeta mensual de Extracciones, con bitácora en Excel y control de duplicados.
 
 ## Documentación
 
@@ -8,14 +8,14 @@ Guía para guardar automáticamente los PDF de pedimentos que envía el agente a
 - [Expresiones para pegar](power-automate-pedimentos/EXPRESIONES.md)
 - [Plantilla de configuración](power-automate-pedimentos/CONFIG.md)
 
-## Resumen
+## Reglas
 
 | Qué | Cómo |
 |-----|------|
-| Origen | Correos del dominio **`@intelideck.com`** con PDF |
-| Nombre PDF | Indistinto (se guardan todos los `.pdf`) |
-| Destino | OneDrive → `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026` |
-| Carpeta del mes | Se crea sola, ej. `10 OCTUBRE 2026` |
-| Equivalente en PC | `C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\...` (sincronizado) |
+| Remitente | Dominio **`@intelideck.com`** |
+| PDF | Todos los `.pdf` (nombre indistinto) |
+| Destino | `.../EXTRACCIONES {año}/{MM MES AÑO}` |
+| Anti-duplicado | Excel `MessageID` + `NombrePDF` |
+| Auditoría | `CONTROL PEDIMENTOS.xlsx` con `TamanoBytes` y `Estado` |
 
-Sigue la guía en `power-automate-pedimentos/GUIA-FLUJO.md` dentro de [make.powerautomate.com](https://make.powerautomate.com).
+Ármalo en [make.powerautomate.com](https://make.powerautomate.com).

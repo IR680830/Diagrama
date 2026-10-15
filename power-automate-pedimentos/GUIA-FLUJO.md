@@ -1,188 +1,92 @@
-# Guardar PDF de pedimentos (Outlook → OneDrive)
+# Pedimentos Intelideck → OneDrive + Excel de control
 
-Flujo automatizado en **Power Automate** (nube) para:
+Flujo profesional en **Power Automate** para:
 
 1. Detectar correos del dominio **`@intelideck.com`**.
-2. Guardar **todos** los PDF adjuntos (el nombre es indistinto).
-3. Crear (si no existe) la carpeta del mes, por ejemplo `10 OCTUBRE 2026`.
-4. Guardarlos en OneDrive, en la ruta de Extracciones.
-
-Ruta base (equivalente a tu carpeta local sincronizada):
-
-```text
-Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026
-```
-
-Ejemplo carpeta del mes:
-
-```text
-.../EXTRACCIONES 2026/10 OCTUBRE 2026
-```
-
-> Nota: en OneDrive/SharePoint no uses la ruta `C:\Users\...`. Usa la ruta relativa dentro de OneDrive (arriba). El cliente de OneDrive la sincroniza a tu PC.
+2. Guardar **todos** los PDF adjuntos (nombre indistinto).
+3. Crear carpetas de año y mes (`EXTRACCIONES 2026` / `10 OCTUBRE 2026`).
+4. Evitar duplicados con un Excel de control (`MessageID` + `NombrePDF`).
+5. Registrar tamaño del archivo y manejar errores sin tumbar el flujo.
 
 ---
 
-## Antes de empezar
+## 1) Excel de control (crear una sola vez)
 
-Necesitas:
+Crea el archivo:
 
-- Cuenta Microsoft 365 con Outlook y OneDrive (Andujar).
-- Acceso a [https://make.powerautomate.com](https://make.powerautomate.com)
+```text
+CONTROL PEDIMENTOS.xlsx
+```
 
-Filtros ya definidos:
+Ubicación en OneDrive:
 
-| Dato | Valor |
-|------|--------|
-| Remitente | Dominio **`@intelideck.com`** |
-| Nombre PDF | Indistinto — se guardan **todos** los `.pdf` |
-| Asunto | Sin filtro |
-| Año de extracciones | `2026` |
-| Carpeta base OneDrive | `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026` |
+```text
+Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/CONTROL/CONTROL PEDIMENTOS.xlsx
+```
+
+Convierte el rango en tabla con nombre:
+
+```text
+tblPedimentos
+```
+
+Columnas (en este orden):
+
+| FechaCorreo | Remitente | MessageID | NombrePDF | TamanoBytes | RutaDestino | FechaGuardado | Estado |
+|-------------|-----------|-----------|-----------|-------------|-------------|---------------|--------|
+
+> `Estado` sirve para auditoría (`Guardado` / `Error`).  
+> `TamanoBytes` evita confusiones si llega el mismo nombre con otro contenido.
 
 ---
 
-## Crear el flujo (paso a paso)
+## 2) Crear el flujo
 
-### 1) Nuevo flujo automatizado
+Nombre sugerido: `Pedimentos Intelideck - OneDrive + Control Excel`
 
-1. Entra a **Power Automate** → **Crear** → **Flujo de nube automatizado**.
-2. Nombre sugerido: `Pedimentos - Guardar PDF en Extracciones`.
-3. Descarta el asistente y arma el flujo a mano (más claro).
+### Paso 1 — Desencadenador
 
-### 2) Desencadenador
-
-**Conector:** Office 365 Outlook  
-**Acción:** *Cuando llega un nuevo correo electrónico (V3)*
-
-Configuración recomendada:
+**Office 365 Outlook** → *Cuando llega un nuevo correo electrónico (V3)*
 
 | Campo | Valor |
 |-------|--------|
-| Carpeta | `Bandeja de entrada` (o la carpeta donde llegan) |
+| Carpeta | Bandeja de entrada |
 | Incluir archivos adjuntos | **Sí** |
 | Solo con archivos adjuntos | **Sí** |
-| De | *(vacío)* — el filtro de dominio va en la condición de abajo |
+| De | *(vacío)* |
 | Asunto contiene | *(vacío)* |
 
-Justo después del desencadenador, añade una **Condición** (solo dominio `intelideck.com`):
+### Paso 2 — Condición dominio Intelideck
 
-```powerfx
-contains(toLower(string(triggerOutputs()?['body/from'])), '@intelideck.com')
-```
-
-Versión más estricta (toma lo que va después de `@`):
+Expresión (recomendada):
 
 ```powerfx
 endsWith(
-  toLower(
-    trim(
-      last(
-        split(
-          string(triggerOutputs()?['body/from']),
-          '@'
-        )
-      )
-    )
-  ),
-  'intelideck.com'
+  toLower(triggerBody()?['from']?['emailAddress']?['address']),
+  '@intelideck.com'
 )
 ```
 
-- **Si sí** → continúa el flujo (crear carpeta + guardar PDF).
-- **Si no** → no hagas nada (termina).
-
-### 3) Inicializar variables
-
-Añade **Inicializar variable** (una por cada una):
-
-#### A) `AnioExtracciones` (Cadena)
-
-```text
-2026
-```
-
-#### B) `RutaBase` (Cadena)
-
-```text
-Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026
-```
-
-#### C) `NombreCarpetaMes` (Cadena) — expresión
-
-En el campo Valor → **Expresión**:
+Si en tu tenant `from` viene como texto plano:
 
 ```powerfx
-concat(
-  formatDateTime(utcNow(), 'MM'),
-  ' ',
-  toUpper(
-    replace(
-      replace(
-        replace(
-          replace(
-            replace(
-              replace(
-                replace(
-                  replace(
-                    replace(
-                      replace(
-                        replace(
-                          replace(
-                            formatDateTime(utcNow(), 'MMMM', 'es-MX'),
-                            'á', 'A'
-                          ),
-                          'é', 'E'
-                        ),
-                        'í', 'I'
-                      ),
-                      'ó', 'O'
-                    ),
-                    'ú', 'U'
-                  ),
-                  'ñ', 'N'
-                ),
-                'january', 'ENERO'
-              ),
-              'february', 'FEBRERO'
-            ),
-            'march', 'MARZO'
-          ),
-          'april', 'ABRIL'
-        ),
-        'may', 'MAYO'
-      ),
-      'june', 'JUNIO'
-    )
-  ),
-  ' ',
-  formatDateTime(utcNow(), 'yyyy')
-)
+contains(toLower(string(triggerBody()?['from'])), '@intelideck.com')
 ```
 
-Si tu entorno ya devuelve el mes en español con `es-MX`, puedes usar esta versión más corta:
+- **Sí** → continúa  
+- **No** → termina (sin acciones)
+
+### Paso 3 — Variable `Anio` (String)
 
 ```powerfx
-concat(
-  formatDateTime(utcNow(), 'MM'),
-  ' ',
-  toUpper(formatDateTime(utcNow(), 'MMMM', 'es-MX')),
-  ' ',
-  formatDateTime(utcNow(), 'yyyy')
-)
+formatDateTime(triggerBody()?['receivedDateTime'], 'yyyy')
 ```
 
-Resultado esperado hoy: `10 OCTUBRE 2026`.
-
-> Si el mes sale en inglés (`OCTOBER`), usa la tabla de conversión de abajo en una **Compose** o cambia a la expresión larga / switch por número de mes.
-
-#### Alternativa estable (recomendada): mes por número
-
-**Compose** llamado `MesEsp` con expresión:
+### Paso 4 — Compose `MesEsp`
 
 ```powerfx
 switch(
-  int(formatDateTime(utcNow(), 'MM')),
+  int(formatDateTime(triggerBody()?['receivedDateTime'], 'MM')),
   1, 'ENERO',
   2, 'FEBRERO',
   3, 'MARZO',
@@ -199,211 +103,289 @@ switch(
 )
 ```
 
-Luego `NombreCarpetaMes`:
+### Paso 5 — Variable `CarpetaMes` (String)
 
 ```powerfx
 concat(
-  formatDateTime(utcNow(), 'MM'),
+  formatDateTime(triggerBody()?['receivedDateTime'], 'MM'),
   ' ',
   outputs('MesEsp'),
   ' ',
-  formatDateTime(utcNow(), 'yyyy')
+  formatDateTime(triggerBody()?['receivedDateTime'], 'yyyy')
 )
 ```
 
-### 4) Crear carpeta del mes (si no existe)
+Ejemplo: `10 OCTUBRE 2026`
 
-**Conector:** OneDrive for Business  
-**Acción:** *Crear nueva carpeta*
+### Paso 6 — Variable `RutaAnio` (String)
+
+```powerfx
+concat(
+  '/Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES ',
+  variables('Anio')
+)
+```
+
+### Paso 7 — Variable `RutaMes` (String)
+
+```powerfx
+concat(
+  variables('RutaAnio'),
+  '/',
+  variables('CarpetaMes')
+)
+```
+
+### Paso 8 — Crear carpeta del año
+
+**OneDrive for Business** → *Crear nueva carpeta*
 
 | Campo | Valor |
 |-------|--------|
-| Ruta de la carpeta | `@{variables('RutaBase')}` |
-| Nombre | `@{variables('NombreCarpetaMes')}` |
+| Ruta | `/Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES` |
+| Nombre | `concat('EXTRACCIONES ', variables('Anio'))` |
 
-Configura **Configurar ejecución posterior** en esta acción:
+**Configurar ejecución posterior:** Correcto + Error + Omitido  
+(así no falla si la carpeta ya existe)
 
-- También ejecutar si da error (porque si la carpeta ya existe, OneDrive a veces falla).
+### Paso 9 — Crear carpeta del mes
 
-Opcional más robusto:
+| Campo | Valor |
+|-------|--------|
+| Ruta | `variables('RutaAnio')` |
+| Nombre | `variables('CarpetaMes')` |
 
-1. **Obtener metadatos de archivo o carpeta** con ruta  
-   `@{variables('RutaBase')}/@{variables('NombreCarpetaMes')}`
-2. Si falla → **Crear nueva carpeta**.
-3. Si existe → continuar.
+**Configurar ejecución posterior:** Correcto + Error + Omitido
 
-### 5) Recorrer adjuntos
+### Paso 10 — Scope `ProcesarAdjuntos` (manejo de errores)
 
-Tras el desencadenador, usa el array de adjuntos:
+Envuelve los pasos 11–17 en un **Ámbito (Scope)** llamado `ProcesarAdjuntos`.
 
-**Aplicar a cada uno** → `Adjuntos` del correo.
+Luego añade otro Scope `SiFalloProcesar` con **ejecutar solo si `ProcesarAdjuntos` falla**, y dentro:
+
+**Excel** → *Agregar una fila a una tabla* (registro de error):
+
+| Columna | Valor |
+|---------|--------|
+| FechaCorreo | `triggerBody()?['receivedDateTime']` |
+| Remitente | `triggerBody()?['from']?['emailAddress']?['address']` |
+| MessageID | `triggerBody()?['id']` |
+| NombrePDF | `(error global)` |
+| TamanoBytes | `0` |
+| RutaDestino | `variables('RutaMes')` |
+| FechaGuardado | `utcNow()` |
+| Estado | `Error` |
+
+Opcional: acción *Enviar un correo* a ti mismo avisando el fallo.
+
+### Paso 11 — Aplicar a cada uno
+
+Origen: `Attachments` del correo.
 
 Dentro del bucle:
 
-#### Condición: cualquier PDF (nombre indistinto)
-
-Da igual que se llame `1422CEX0126026494.pdf` u otro nombre. Solo filtra extensión:
+### Paso 12 — Condición: ¿es PDF?
 
 ```powerfx
 endsWith(toLower(items('Apply_to_each')?['name']), '.pdf')
 ```
 
-#### Si sí → Crear archivo
+- **No** → siguiente adjunto  
+- **Sí** → continúa
 
-**Conector:** OneDrive for Business  
-**Acción:** *Crear archivo*
+### Paso 13 — Consultar Excel (¿ya existe?)
+
+**Excel Online (Business)** → *Listar filas presentes en una tabla*
 
 | Campo | Valor |
 |-------|--------|
-| Ruta de la carpeta | `@{variables('RutaBase')}/@{variables('NombreCarpetaMes')}` |
-| Nombre de archivo | `@{items('Apply_to_each')?['name']}` |
-| Contenido del archivo | `@{items('Apply_to_each')?['contentBytes']}` |
+| Ubicación | OneDrive / Documentos… |
+| Biblioteca | OneDrive |
+| Archivo | `CONTROL PEDIMENTOS.xlsx` |
+| Tabla | `tblPedimentos` |
 
-Si el desencadenador V3 no trae `contentBytes` en el bucle, inserta antes:
+#### Filtro OData corregido
 
-**Obtener archivo adjunto (V2)**
-
-- Id del mensaje: `Id` del correo
-- Id del archivo adjunto: `Id` del adjunto actual
-
-Y usa el contenido de esa acción en **Crear archivo**.
-
-### 6) (Opcional) Marcar correo como leído / mover
-
-Tras guardar:
-
-- *Marcar como leído*, o
-- *Mover correo* a una carpeta `Pedimentos procesados`.
-
-Así evitas reprocesar a mano.
-
-### 7) Guardar y probar
-
-1. **Guardar** el flujo.
-2. Reenvía a tu bandeja un correo real de `@intelideck.com` con algún PDF (o espera el siguiente).
-3. Revisa en OneDrive:
+En **Consulta de filtro** (Filter Query) pega **una sola línea** (sin saltos ni `and` en líneas separadas mal escapadas):
 
 ```text
-Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026/10 OCTUBRE 2026
+MessageID eq '@{triggerBody()?['id']}' and NombrePDF eq '@{replace(items('Apply_to_each')?['name'], '''', '''''')}'
 ```
 
-4. En el PC debe aparecer por sincronización en:
+Notas OData importantes:
 
-```text
-C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\01 IMPORTACIONES ANDUJAR\IMPORTACIONES\EXTRACCIONES 2026\10 OCTUBRE 2026
-```
+1. Usa `eq` (no `=`).
+2. `and` en minúsculas, en la misma línea.
+3. Si el nombre del PDF tuviera comilla simple `'`, el `replace(... '''', '''''')` la escapa.
+4. Si el conector se queja del filtro dinámico, deja el filtro vacío y usa **Filtrar matriz** (paso 13b).
 
----
+#### Paso 13b — Alternativa sin OData (más estable)
 
-## Diagrama del flujo
+1. *Listar filas presentes en una tabla* **sin** Filter Query.  
+2. Acción **Filtrar matriz**:
 
-```text
-[Cuando llega correo con adjuntos]
-        |
-        v
-[¿Dominio = @intelideck.com?] --No--> (fin)
-        |
-       Sí
-        v
-[Calcular nombre carpeta: MM MES AÑO]
-        |
-        v
-[Crear carpeta en EXTRACCIONES 2026 si no existe]
-        |
-        v
-[Para cada adjunto]
-        |
-        +--> ¿Es .pdf? (cualquier nombre) --No--> (omitir)
-        |
-       Sí
-        v
-[Crear archivo en .../10 OCTUBRE 2026]
-        |
-        v
-[(Opcional) Marcar leído / mover correo]
-```
-
----
-
-## Cambio de año (2027)
-
-Cuando llegue 2027:
-
-1. Crea en OneDrive: `.../EXTRACCIONES 2027`
-2. En el flujo, cambia:
-   - variable `AnioExtracciones` → `2027`
-   - `RutaBase` → `.../EXTRACCIONES 2027`
-
-O haz que `RutaBase` sea dinámica:
+**Desde:**
 
 ```powerfx
-concat(
-  'Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES ',
-  formatDateTime(utcNow(), 'yyyy')
+body('List_rows_present_in_a_table')?['value']
+```
+
+**Condición avanzada:**
+
+```powerfx
+@and(
+  equals(item()?['MessageID'], triggerBody()?['id']),
+  equals(item()?['NombrePDF'], items('Apply_to_each')?['name'])
 )
 ```
 
-Y crea también la carpeta del año al inicio del flujo (misma lógica que la del mes).
+3. La condición de duplicado usa `body('Filter_array')` en lugar de `body('List_rows_present_in_a_table')`.
+
+> Con muchos registros, OData es mejor. Al inicio, Filtrar matriz es más fácil de depurar.
+
+### Paso 14 — Condición: ¿ya procesado?
+
+```powerfx
+greater(length(body('List_rows_present_in_a_table')?['value']), 0)
+```
+
+Si usaste Filtrar matriz:
+
+```powerfx
+greater(length(body('Filter_array')), 0)
+```
+
+- **Sí (TRUE)** → no hacer nada (duplicado; evita sobrescribir).  
+- **No (FALSE)** → guardar PDF + registrar.
+
+### Paso 15 — Obtener contenido del adjunto
+
+**Outlook** → *Obtener archivo adjunto (V2)* / *Get attachment content*
+
+| Campo | Valor |
+|-------|--------|
+| Id del mensaje | `triggerBody()?['id']` |
+| Id del adjunto | `items('Apply_to_each')?['id']` |
+
+### Paso 16 — Crear archivo en OneDrive
+
+**OneDrive for Business** → *Crear archivo*
+
+| Campo | Valor |
+|-------|--------|
+| Ruta de carpeta | `variables('RutaMes')` |
+| Nombre | `items('Apply_to_each')?['name']` |
+| Contenido | contenido del paso 15 |
+
+**Configurar ejecución posterior:** Correcto + Error  
+Si falla (conflicto de nombre raro), el Scope de error lo captura.
+
+### Paso 17 — Registrar en Excel
+
+**Excel Online (Business)** → *Agregar una fila a una tabla*
+
+Tabla: `tblPedimentos`
+
+| Columna | Valor |
+|---------|--------|
+| FechaCorreo | `triggerBody()?['receivedDateTime']` |
+| Remitente | `triggerBody()?['from']?['emailAddress']?['address']` |
+| MessageID | `triggerBody()?['id']` |
+| NombrePDF | `items('Apply_to_each')?['name']` |
+| TamanoBytes | `items('Apply_to_each')?['size']` |
+| RutaDestino | `concat('EXTRACCIONES ', variables('Anio'), '/', variables('CarpetaMes'))` |
+| FechaGuardado | `utcNow()` |
+| Estado | `Guardado` |
 
 ---
 
-## SharePoint en lugar de OneDrive
+## 3) Diagrama
 
-Si la biblioteca está en un sitio SharePoint:
-
-1. Cambia el conector a **SharePoint**.
-2. Sitio: el de Andujar.
-3. Biblioteca / ruta: la equivalente a `Documentos/.../EXTRACCIONES 2026`.
-4. Acciones: *Crear nueva carpeta* y *Crear archivo* de SharePoint.
-
-El resto del flujo es igual.
-
----
-
-## Power Automate Desktop (solo si debes usar ruta C:\)
-
-Solo necesario si **no** puedes usar el conector de OneDrive en la nube.
-
-1. Flujo nube: *Cuando llega correo* → *Ejecutar flujo creado con Power Automate para escritorio*.
-2. En Desktop:
-   - Obtener adjuntos / descargar PDF.
-   - `Folder.Create` en  
-     `%UserProfile%\OneDrive - andujar\Documentos\01 IMPORTACIONES ANDUJAR\IMPORTACIONES\EXTRACCIONES 2026\%MesCarpeta%`
-   - Copiar PDF a esa carpeta.
-
-Para Andujar, la versión **solo nube (OneDrive)** suele ser suficiente y más estable.
-
----
-
-## Checklist de puesta en marcha
-
-- [ ] Condición de dominio `@intelideck.com`
-- [ ] Condición de adjunto: cualquier `.pdf` (nombre indistinto)
-- [ ] `RutaBase` coincide con OneDrive (sin `C:\Users\...`)
-- [ ] Nombre de carpeta = `MM MES AÑO` (ej. `10 OCTUBRE 2026`)
-- [ ] Prueba con un correo real de `@intelideck.com` y verificación en PC sincronizado
-- [ ] Flujo activado (no en borrador)
-
----
-
-## Fallos frecuentes
-
-| Problema | Qué revisar |
-|----------|-------------|
-| No se crea la carpeta | Ruta base mal escrita; permisos OneDrive |
-| Carpeta en inglés (`10 OCTOBER 2026`) | Usar el `switch` de mes en español |
-| Archivo vacío o error al crear | Usar *Obtener archivo adjunto (V2)* y su contenido |
-| No entra el correo al flujo | Que el *From* sea `@intelideck.com`; carpeta de Outlook incorrecta |
-| No guarda el PDF | Que el adjunto termine en `.pdf` (el nombre no importa) |
-| Duplicados | Activar *Marcar como leído* o mover a carpeta procesados |
+```text
+[Correo nuevo con adjuntos]
+        |
+        v
+[¿@intelideck.com?] --No--> fin
+        |
+       Sí
+        v
+[Anio + CarpetaMes]
+        |
+        v
+[Crear EXTRACCIONES AÑO] (ignorar si existe)
+        |
+        v
+[Crear carpeta MES] (ignorar si existe)
+        |
+        v
+[Scope ProcesarAdjuntos]
+        |
+        +--> Para cada adjunto
+                |
+                +--> ¿.pdf? --No--> siguiente
+                |
+               Sí
+                v
+         [¿MessageID+NombrePDF en Excel?]
+                |
+          Sí --> ignorar
+          No --> obtener contenido
+                    --> crear archivo OneDrive
+                    --> fila Excel (TamanoBytes + Guardado)
+        |
+        v
+[Si falla Scope] --> fila Excel Estado=Error (+ aviso opcional)
+```
 
 ---
 
-## Filtros aplicados
+## 4) Resultado esperado
 
-| Criterio | Regla |
-|----------|--------|
-| Remitente | Dominio **`@intelideck.com`** |
-| Adjunto | Cualquier archivo que termine en **`.pdf`** |
-| Nombre del PDF | Indistinto |
-| Asunto | Sin filtro |
+Correo de `ivonne.casillas@intelideck.com` con:
+
+```text
+1422CEX0126026494.pdf
+1422CEX0126026495.pdf
+```
+
+Quedan en:
+
+```text
+.../EXTRACCIONES 2026/10 OCTUBRE 2026/
+```
+
+PC sincronizado:
+
+```text
+C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\01 IMPORTACIONES ANDUJAR\IMPORTACIONES\EXTRACCIONES 2026\10 OCTUBRE 2026\
+```
+
+Y en `CONTROL PEDIMENTOS.xlsx` una fila por PDF guardado (o `Error` si falló).
+
+Si el mismo correo se reenvía o el flujo corre dos veces: **no se vuelve a guardar** porque `MessageID` + `NombrePDF` ya existen.
+
+---
+
+## 5) Manejo de errores (resumen)
+
+| Situación | Qué hace el flujo |
+|-----------|-------------------|
+| Carpeta año/mes ya existe | Continúa (run after Error/Omitido) |
+| PDF ya en Excel (mismo MessageID + nombre) | Ignora; no sobrescribe |
+| Falla al crear archivo / Excel | Scope captura → fila `Estado=Error` |
+| Adjunto no PDF | Se salta |
+
+Opcional extra (doble red): además del Excel, puedes listar archivos en la carpeta del mes y omitir si el mismo **nombre + tamaño** ya está en OneDrive. El Excel con MessageID suele bastar.
+
+---
+
+## 6) Checklist
+
+- [ ] Excel `CONTROL PEDIMENTOS.xlsx` creado con tabla `tblPedimentos` y columna `TamanoBytes`
+- [ ] Condición `@intelideck.com`
+- [ ] Carpetas año/mes con run-after en error
+- [ ] Filtro OData en una sola línea (o Filtrar matriz)
+- [ ] Solo `.pdf`
+- [ ] Registro Excel tras guardar (o Error en Scope)
+- [ ] Prueba con correo real de Intelideck
+- [ ] Flujo activado

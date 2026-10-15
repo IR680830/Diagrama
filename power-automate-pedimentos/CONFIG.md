@@ -1,46 +1,47 @@
-# Configuración del flujo (rellenar)
-
-Copia estos valores al crear el flujo en make.powerautomate.com.
+# Configuración del flujo
 
 ## Correo
 
 | Campo | Valor |
 |-------|-------|
 | Remitente | Dominio **`@intelideck.com`** |
+| Ejemplo | `ivonne.casillas@intelideck.com` |
 | Carpeta Outlook | Bandeja de entrada |
-| Asunto contiene | *(dejar vacío)* |
-| Solo correos con adjuntos | Sí |
+| Solo con adjuntos | Sí |
+| Nombre PDF | Indistinto |
 
-## Adjuntos PDF (pedimentos)
+## Excel de control
 
 | Campo | Valor |
 |-------|-------|
-| Ejemplo de nombre | `1422CEX0126026494.pdf` (el nombre no importa) |
-| Regla | Cualquier archivo con extensión `.pdf` |
-| Expresión recomendada | ver `EXPRESIONES.md` → *PDF de Intelideck* |
+| Archivo | `CONTROL PEDIMENTOS.xlsx` |
+| Ruta | `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/CONTROL/` |
+| Tabla | `tblPedimentos` |
+| Clave anti-duplicado | `MessageID` + `NombrePDF` |
+
+Columnas:
+
+```text
+FechaCorreo | Remitente | MessageID | NombrePDF | TamanoBytes | RutaDestino | FechaGuardado | Estado
+```
 
 ## Destino OneDrive
 
 | Campo | Valor |
 |-------|-------|
-| Ruta base 2026 | `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026` |
-| Patrón carpeta mes | `MM MES AÑO` (ej. `10 OCTUBRE 2026`) |
-| Tipos de archivo | Todos los `.pdf` |
+| Base | `/Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES` |
+| Año | `EXTRACCIONES {yyyy}` |
+| Mes | `MM MES AÑO` (ej. `10 OCTUBRE 2026`) |
 
-## Equivalencia PC ↔ OneDrive
+## Orden de acciones
 
-| En el PC (sincronizado) | En Power Automate (OneDrive) |
-|-------------------------|------------------------------|
-| `C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\01 IMPORTACIONES ANDUJAR\IMPORTACIONES\EXTRACCIONES 2026\10 OCTUBRE 2026` | `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026/10 OCTUBRE 2026` |
-
-## Acciones del flujo (orden)
-
-1. Cuando llega un nuevo correo electrónico (V3) — Outlook
-2. Compose `MesEsp` — expresión switch
-3. Inicializar / Compose `NombreCarpetaMes`
-4. Inicializar `RutaBase`
-5. Crear nueva carpeta — OneDrive (`RutaBase` + `NombreCarpetaMes`)
-6. Aplicar a cada uno — Adjuntos
-7. Condición — es `.pdf` (cualquier nombre)
-8. Crear archivo — OneDrive en carpeta del mes
-9. (Opcional) Marcar como leído / Mover correo
+1. Cuando llega un nuevo correo (V3)
+2. Condición `@intelideck.com`
+3. Variables `Anio`, `CarpetaMes`, `RutaAnio`, `RutaMes`
+4. Crear carpeta año (run after error)
+5. Crear carpeta mes (run after error)
+6. Scope `ProcesarAdjuntos`
+7. Aplicar a cada adjunto → ¿`.pdf`?
+8. Listar filas Excel (OData o Filtrar matriz)
+9. Si no existe → Get attachment → Crear archivo → Add row (`TamanoBytes`, `Estado=Guardado`)
+10. Scope fallo → Add row (`Estado=Error`)

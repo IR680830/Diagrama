@@ -2,9 +2,10 @@
 
 Flujo automatizado en **Power Automate** (nube) para:
 
-1. Detectar correos del agente aduanal con PDF de pedimentos.
-2. Crear (si no existe) la carpeta del mes, por ejemplo `10 OCTUBRE 2026`.
-3. Guardar los PDF en OneDrive, en la ruta de Extracciones.
+1. Detectar **todos** los correos que vengan de **Intelideck**.
+2. Extraer los PDF de pedimentos (nombres tipo `1422CEX0126026494.pdf`).
+3. Crear (si no existe) la carpeta del mes, por ejemplo `10 OCTUBRE 2026`.
+4. Guardar esos PDF en OneDrive, en la ruta de Extracciones.
 
 Ruta base (equivalente a tu carpeta local sincronizada):
 
@@ -28,15 +29,14 @@ Necesitas:
 
 - Cuenta Microsoft 365 con Outlook y OneDrive (Andujar).
 - Acceso a [https://make.powerautomate.com](https://make.powerautomate.com)
-- Correo del **agente aduanal** (remitente exacto o dominio).
-- Criterio del asunto o del nombre del PDF (ej. que contenga `pedimento`).
 
-Completa esto y ajústalo en el flujo:
+Filtros ya definidos:
 
 | Dato | Valor |
 |------|--------|
-| Remitente agente aduanal | `________________@________` |
-| Palabra en asunto (opcional) | `pedimento` |
+| Remitente | Cualquier correo que contenga **`intelideck`** |
+| Nombre PDF | Tipo **`1422CEX0126026494`** (suele incluir `CEX`) |
+| Asunto | No se filtra (entran todos los de Intelideck) |
 | Año de extracciones | `2026` |
 | Carpeta base OneDrive | `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026` |
 
@@ -62,8 +62,19 @@ Configuración recomendada:
 | Carpeta | `Bandeja de entrada` (o la carpeta donde llegan) |
 | Incluir archivos adjuntos | **Sí** |
 | Solo con archivos adjuntos | **Sí** |
-| De | correo del agente aduanal |
-| Asunto contiene | `pedimento` (si aplica; si no, déjalo vacío y filtra después) |
+| De | déjalo vacío si no conoces el correo exacto; filtra abajo con `intelideck` |
+| Asunto contiene | *(vacío)* |
+
+Justo después del desencadenador, añade una **Condición**:
+
+```powerfx
+contains(toLower(string(triggerOutputs()?['body/from'])), 'intelideck')
+```
+
+- **Si sí** → continúa el flujo (crear carpeta + guardar PDF).
+- **Si no** → no hagas nada (termina).
+
+> Si ya sabes el correo exacto (ej. `notificaciones@intelideck.com`), puedes ponerlo en el campo **De** del desencadenador y omitir esta condición.
 
 ### 3) Inicializar variables
 
@@ -213,26 +224,24 @@ Tras el desencadenador, usa el array de adjuntos:
 
 Dentro del bucle:
 
-#### Condición: solo PDF de pedimentos
+#### Condición: solo PDF de pedimentos (nombre tipo código)
 
-Condición (modo avanzado / expresiones):
+Ejemplo real: `1422CEX0126026494.pdf`
 
 ```powerfx
 and(
   endsWith(toLower(items('Apply_to_each')?['name']), '.pdf'),
-  or(
-    contains(toLower(items('Apply_to_each')?['name']), 'pedimento'),
-    contains(toLower(triggerOutputs()?['body/subject']), 'pedimento'),
-    true
-  )
+  contains(toUpper(items('Apply_to_each')?['name']), 'CEX')
 )
 ```
 
-- Si **todos** los PDF del agente son pedimentos, deja solo:
+Si Intelideck a veces manda el PDF **sin** `CEX` en el nombre pero sigue siendo pedimento, usa en su lugar solo:
 
 ```powerfx
 endsWith(toLower(items('Apply_to_each')?['name']), '.pdf')
 ```
+
+Así guarda **todos** los PDF de esos correos.
 
 #### Si sí → Crear archivo
 
@@ -266,7 +275,7 @@ Así evitas reprocesar a mano.
 ### 7) Guardar y probar
 
 1. **Guardar** el flujo.
-2. Envía (o reenvía) un correo de prueba con un PDF de pedimento desde / simulando el agente.
+2. Reenvía a tu bandeja un correo real de Intelideck con un PDF tipo `1422CEX0126026494.pdf` (o espera el siguiente).
 3. Revisa en OneDrive:
 
 ```text
@@ -287,8 +296,9 @@ C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\01 IMPORTACIONES ANDUJAR\I
 [Cuando llega correo con adjuntos]
         |
         v
-[Filtro: de agente aduanal (+ asunto)]
+[¿Remitente contiene "intelideck"?] --No--> (fin)
         |
+       Sí
         v
 [Calcular nombre carpeta: MM MES AÑO]
         |
@@ -298,7 +308,7 @@ C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\01 IMPORTACIONES ANDUJAR\I
         v
 [Para cada adjunto]
         |
-        +--> ¿Es PDF (pedimento)? --No--> (omitir)
+        +--> ¿PDF con nombre tipo 1422CEX…? --No--> (omitir)
         |
        Sí
         v
@@ -362,12 +372,11 @@ Para Andujar, la versión **solo nube (OneDrive)** suele ser suficiente y más e
 
 ## Checklist de puesta en marcha
 
-- [ ] Remitente del agente aduanal configurado en el desencadenador
-- [ ] Filtro de asunto / nombre PDF ajustado a cómo llegan los correos
+- [ ] Condición de remitente con `intelideck` (o campo **De** con el correo exacto)
+- [ ] Condición de adjunto: `.pdf` y nombre con `CEX` (ej. `1422CEX0126026494.pdf`)
 - [ ] `RutaBase` coincide con OneDrive (sin `C:\Users\...`)
 - [ ] Nombre de carpeta = `MM MES AÑO` (ej. `10 OCTUBRE 2026`)
-- [ ] Solo se guardan `.pdf`
-- [ ] Prueba con un correo real y verificación en PC sincronizado
+- [ ] Prueba con un correo real de Intelideck y verificación en PC sincronizado
 - [ ] Flujo activado (no en borrador)
 
 ---
@@ -379,17 +388,18 @@ Para Andujar, la versión **solo nube (OneDrive)** suele ser suficiente y más e
 | No se crea la carpeta | Ruta base mal escrita; permisos OneDrive |
 | Carpeta en inglés (`10 OCTOBER 2026`) | Usar el `switch` de mes en español |
 | Archivo vacío o error al crear | Usar *Obtener archivo adjunto (V2)* y su contenido |
-| No entra el correo al flujo | Filtro De/Asunto demasiado estricto; carpeta de Outlook incorrecta |
-| Duplicados | Activar *Marcar como leído* o mover a carpeta procesados; o comprobar si el flujo se dispara dos veces |
+| No entra el correo al flujo | Que el *From* contenga `intelideck`; carpeta de Outlook incorrecta |
+| Guarda PDF que no son pedimento | Usa el filtro con `CEX` en el nombre |
+| No guarda un pedimento válido | Revisa si ese PDF no trae `CEX`; entonces usa solo filtro `.pdf` |
+| Duplicados | Activar *Marcar como leído* o mover a carpeta procesados |
 
 ---
 
-## Qué te pido para afinarlo (opcional)
+## Filtros ya aplicados (Intelideck)
 
-Si me pasas:
-
-1. Correo exacto del agente aduanal  
-2. Un ejemplo de **asunto**  
-3. Un ejemplo de **nombre de PDF**  
-
-…ajusto los filtros a prueba de errores (sin guardar facturas u otros PDF).
+| Criterio | Regla |
+|----------|--------|
+| Remitente | Contiene `intelideck` |
+| Adjunto | Termina en `.pdf` |
+| Nombre | Tipo `1422CEX0126026494` (contiene `CEX`) |
+| Asunto | Sin filtro |

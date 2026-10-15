@@ -59,30 +59,65 @@ concat(
 )
 ```
 
-## Condición: adjunto es PDF
+## Condición: el correo es de Intelideck
+
+Tras el desencadenador (si no filtraste en el campo *De*):
+
+```powerfx
+or(
+  contains(toLower(triggerOutputs()?['body/from']), 'intelideck'),
+  contains(toLower(triggerOutputs()?['body/from']), 'intelideck.com')
+)
+```
+
+Si en tu conector el remitente viene en otra propiedad, prueba también:
+
+```powerfx
+contains(toLower(string(triggerOutputs()?['body/from'])), 'intelideck')
+```
+
+## Condición: PDF pedimento Intelideck (recomendada)
+
+Nombres reales tipo `1422CEX0126026494.pdf`:
+
+```powerfx
+and(
+  endsWith(toLower(items('Apply_to_each')?['name']), '.pdf'),
+  contains(toUpper(items('Apply_to_each')?['name']), 'CEX')
+)
+```
+
+## Condición: todos los PDF del correo (si no hay otros adjuntos)
+
+Solo si Intelideck **solo** manda PDF de pedimentos y ningún otro PDF:
 
 ```powerfx
 endsWith(toLower(items('Apply_to_each')?['name']), '.pdf')
 ```
 
-## Condición: PDF y nombre contiene "pedimento"
+## Condición alternativa: PDF cuyo nombre es solo código alfanumérico
+
+Útil si algún pedimento no trae `CEX` en el nombre. Ejemplo válido: `1422CEX0126026494.pdf`.
 
 ```powerfx
 and(
   endsWith(toLower(items('Apply_to_each')?['name']), '.pdf'),
-  contains(toLower(items('Apply_to_each')?['name']), 'pedimento')
-)
-```
-
-## Condición: PDF y (nombre o asunto contienen "pedimento")
-
-```powerfx
-and(
-  endsWith(toLower(items('Apply_to_each')?['name']), '.pdf'),
-  or(
-    contains(toLower(items('Apply_to_each')?['name']), 'pedimento'),
-    contains(toLower(triggerOutputs()?['body/subject']), 'pedimento')
-  )
+  greater(
+    length(
+      replace(
+        replace(
+          toUpper(items('Apply_to_each')?['name']),
+          '.PDF',
+          ''
+        ),
+        ' ',
+        ''
+      )
+    ),
+    10
+  ),
+  not(contains(toLower(items('Apply_to_each')?['name']), 'factura')),
+  not(contains(toLower(items('Apply_to_each')?['name']), 'guia'))
 )
 ```
 

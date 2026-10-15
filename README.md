@@ -12,7 +12,8 @@ Guía para guardar automáticamente los PDF de pedimentos que envía el agente a
 
 | Qué | Cómo |
 |-----|------|
-| Origen | Correos Outlook del agente aduanal con PDF |
+| Origen | Todos los correos de **Intelideck** con PDF |
+| Nombre PDF | Tipo `1422CEX0126026494.pdf` (código con `CEX`) |
 | Destino | OneDrive → `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026` |
 | Carpeta del mes | Se crea sola, ej. `10 OCTUBRE 2026` |
 | Equivalente en PC | `C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\...` (sincronizado) |

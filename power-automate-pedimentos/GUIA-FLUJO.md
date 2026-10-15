@@ -2,10 +2,10 @@
 
 Flujo automatizado en **Power Automate** (nube) para:
 
-1. Detectar **todos** los correos que vengan de **Intelideck**.
-2. Extraer los PDF de pedimentos (nombres tipo `1422CEX0126026494.pdf`).
+1. Detectar correos del dominio **`@intelideck.com`**.
+2. Guardar **todos** los PDF adjuntos (el nombre es indistinto).
 3. Crear (si no existe) la carpeta del mes, por ejemplo `10 OCTUBRE 2026`.
-4. Guardar esos PDF en OneDrive, en la ruta de Extracciones.
+4. Guardarlos en OneDrive, en la ruta de Extracciones.
 
 Ruta base (equivalente a tu carpeta local sincronizada):
 
@@ -34,9 +34,9 @@ Filtros ya definidos:
 
 | Dato | Valor |
 |------|--------|
-| Remitente | Cualquier correo que contenga **`intelideck`** |
-| Nombre PDF | Tipo **`1422CEX0126026494`** (suele incluir `CEX`) |
-| Asunto | No se filtra (entran todos los de Intelideck) |
+| Remitente | Dominio **`@intelideck.com`** |
+| Nombre PDF | Indistinto — se guardan **todos** los `.pdf` |
+| Asunto | Sin filtro |
 | Año de extracciones | `2026` |
 | Carpeta base OneDrive | `Documentos/01 IMPORTACIONES ANDUJAR/IMPORTACIONES/EXTRACCIONES 2026` |
 
@@ -62,19 +62,35 @@ Configuración recomendada:
 | Carpeta | `Bandeja de entrada` (o la carpeta donde llegan) |
 | Incluir archivos adjuntos | **Sí** |
 | Solo con archivos adjuntos | **Sí** |
-| De | déjalo vacío si no conoces el correo exacto; filtra abajo con `intelideck` |
+| De | *(vacío)* — el filtro de dominio va en la condición de abajo |
 | Asunto contiene | *(vacío)* |
 
-Justo después del desencadenador, añade una **Condición**:
+Justo después del desencadenador, añade una **Condición** (solo dominio `intelideck.com`):
 
 ```powerfx
-contains(toLower(string(triggerOutputs()?['body/from'])), 'intelideck')
+contains(toLower(string(triggerOutputs()?['body/from'])), '@intelideck.com')
+```
+
+Versión más estricta (toma lo que va después de `@`):
+
+```powerfx
+endsWith(
+  toLower(
+    trim(
+      last(
+        split(
+          string(triggerOutputs()?['body/from']),
+          '@'
+        )
+      )
+    )
+  ),
+  'intelideck.com'
+)
 ```
 
 - **Si sí** → continúa el flujo (crear carpeta + guardar PDF).
 - **Si no** → no hagas nada (termina).
-
-> Si ya sabes el correo exacto (ej. `notificaciones@intelideck.com`), puedes ponerlo en el campo **De** del desencadenador y omitir esta condición.
 
 ### 3) Inicializar variables
 
@@ -224,24 +240,13 @@ Tras el desencadenador, usa el array de adjuntos:
 
 Dentro del bucle:
 
-#### Condición: solo PDF de pedimentos (nombre tipo código)
+#### Condición: cualquier PDF (nombre indistinto)
 
-Ejemplo real: `1422CEX0126026494.pdf`
-
-```powerfx
-and(
-  endsWith(toLower(items('Apply_to_each')?['name']), '.pdf'),
-  contains(toUpper(items('Apply_to_each')?['name']), 'CEX')
-)
-```
-
-Si Intelideck a veces manda el PDF **sin** `CEX` en el nombre pero sigue siendo pedimento, usa en su lugar solo:
+Da igual que se llame `1422CEX0126026494.pdf` u otro nombre. Solo filtra extensión:
 
 ```powerfx
 endsWith(toLower(items('Apply_to_each')?['name']), '.pdf')
 ```
-
-Así guarda **todos** los PDF de esos correos.
 
 #### Si sí → Crear archivo
 
@@ -275,7 +280,7 @@ Así evitas reprocesar a mano.
 ### 7) Guardar y probar
 
 1. **Guardar** el flujo.
-2. Reenvía a tu bandeja un correo real de Intelideck con un PDF tipo `1422CEX0126026494.pdf` (o espera el siguiente).
+2. Reenvía a tu bandeja un correo real de `@intelideck.com` con algún PDF (o espera el siguiente).
 3. Revisa en OneDrive:
 
 ```text
@@ -296,7 +301,7 @@ C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\01 IMPORTACIONES ANDUJAR\I
 [Cuando llega correo con adjuntos]
         |
         v
-[¿Remitente contiene "intelideck"?] --No--> (fin)
+[¿Dominio = @intelideck.com?] --No--> (fin)
         |
        Sí
         v
@@ -308,7 +313,7 @@ C:\Users\ISMAEL RAMIREZ\OneDrive - andujar\Documentos\01 IMPORTACIONES ANDUJAR\I
         v
 [Para cada adjunto]
         |
-        +--> ¿PDF con nombre tipo 1422CEX…? --No--> (omitir)
+        +--> ¿Es .pdf? (cualquier nombre) --No--> (omitir)
         |
        Sí
         v
@@ -372,11 +377,11 @@ Para Andujar, la versión **solo nube (OneDrive)** suele ser suficiente y más e
 
 ## Checklist de puesta en marcha
 
-- [ ] Condición de remitente con `intelideck` (o campo **De** con el correo exacto)
-- [ ] Condición de adjunto: `.pdf` y nombre con `CEX` (ej. `1422CEX0126026494.pdf`)
+- [ ] Condición de dominio `@intelideck.com`
+- [ ] Condición de adjunto: cualquier `.pdf` (nombre indistinto)
 - [ ] `RutaBase` coincide con OneDrive (sin `C:\Users\...`)
 - [ ] Nombre de carpeta = `MM MES AÑO` (ej. `10 OCTUBRE 2026`)
-- [ ] Prueba con un correo real de Intelideck y verificación en PC sincronizado
+- [ ] Prueba con un correo real de `@intelideck.com` y verificación en PC sincronizado
 - [ ] Flujo activado (no en borrador)
 
 ---
@@ -388,18 +393,17 @@ Para Andujar, la versión **solo nube (OneDrive)** suele ser suficiente y más e
 | No se crea la carpeta | Ruta base mal escrita; permisos OneDrive |
 | Carpeta en inglés (`10 OCTOBER 2026`) | Usar el `switch` de mes en español |
 | Archivo vacío o error al crear | Usar *Obtener archivo adjunto (V2)* y su contenido |
-| No entra el correo al flujo | Que el *From* contenga `intelideck`; carpeta de Outlook incorrecta |
-| Guarda PDF que no son pedimento | Usa el filtro con `CEX` en el nombre |
-| No guarda un pedimento válido | Revisa si ese PDF no trae `CEX`; entonces usa solo filtro `.pdf` |
+| No entra el correo al flujo | Que el *From* sea `@intelideck.com`; carpeta de Outlook incorrecta |
+| No guarda el PDF | Que el adjunto termine en `.pdf` (el nombre no importa) |
 | Duplicados | Activar *Marcar como leído* o mover a carpeta procesados |
 
 ---
 
-## Filtros ya aplicados (Intelideck)
+## Filtros aplicados
 
 | Criterio | Regla |
 |----------|--------|
-| Remitente | Contiene `intelideck` |
-| Adjunto | Termina en `.pdf` |
-| Nombre | Tipo `1422CEX0126026494` (contiene `CEX`) |
+| Remitente | Dominio **`@intelideck.com`** |
+| Adjunto | Cualquier archivo que termine en **`.pdf`** |
+| Nombre del PDF | Indistinto |
 | Asunto | Sin filtro |

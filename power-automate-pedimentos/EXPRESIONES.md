@@ -59,66 +59,38 @@ concat(
 )
 ```
 
-## Condición: el correo es de Intelideck
+## Condición: el correo es del dominio intelideck.com (recomendada)
 
-Tras el desencadenador (si no filtraste en el campo *De*):
+Tras el desencadenador:
 
 ```powerfx
-or(
-  contains(toLower(triggerOutputs()?['body/from']), 'intelideck'),
-  contains(toLower(triggerOutputs()?['body/from']), 'intelideck.com')
+endsWith(
+  toLower(
+    trim(
+      last(
+        split(
+          string(triggerOutputs()?['body/from']),
+          '@'
+        )
+      )
+    )
+  ),
+  'intelideck.com'
 )
 ```
 
-Si en tu conector el remitente viene en otra propiedad, prueba también:
+Versión simple (también sirve en la mayoría de casos):
 
 ```powerfx
-contains(toLower(string(triggerOutputs()?['body/from'])), 'intelideck')
+contains(toLower(string(triggerOutputs()?['body/from'])), '@intelideck.com')
 ```
 
-## Condición: PDF pedimento Intelideck (recomendada)
+## Condición: PDF (cualquier nombre)
 
-Nombres reales tipo `1422CEX0126026494.pdf`:
-
-```powerfx
-and(
-  endsWith(toLower(items('Apply_to_each')?['name']), '.pdf'),
-  contains(toUpper(items('Apply_to_each')?['name']), 'CEX')
-)
-```
-
-## Condición: todos los PDF del correo (si no hay otros adjuntos)
-
-Solo si Intelideck **solo** manda PDF de pedimentos y ningún otro PDF:
+El nombre del archivo es indistinto (`1422CEX0126026494.pdf` u otro). Solo importa la extensión:
 
 ```powerfx
 endsWith(toLower(items('Apply_to_each')?['name']), '.pdf')
-```
-
-## Condición alternativa: PDF cuyo nombre es solo código alfanumérico
-
-Útil si algún pedimento no trae `CEX` en el nombre. Ejemplo válido: `1422CEX0126026494.pdf`.
-
-```powerfx
-and(
-  endsWith(toLower(items('Apply_to_each')?['name']), '.pdf'),
-  greater(
-    length(
-      replace(
-        replace(
-          toUpper(items('Apply_to_each')?['name']),
-          '.PDF',
-          ''
-        ),
-        ' ',
-        ''
-      )
-    ),
-    10
-  ),
-  not(contains(toLower(items('Apply_to_each')?['name']), 'factura')),
-  not(contains(toLower(items('Apply_to_each')?['name']), 'guia'))
-)
 ```
 
 ## Valores fijos sugeridos
